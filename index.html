@@ -1,0 +1,377 @@
+import React, { useState, useRef } from 'react';
+
+// 內嵌 SVG 圖示元件 (取代 lucide-react 避免載入錯誤)
+const Icon = ({ size = 24, className = '', title, children }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    {title && <title>{title}</title>}
+    {children}
+  </svg>
+);
+
+const UploadCloud = (props) => <Icon {...props}><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></Icon>;
+const CheckCircle2 = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></Icon>;
+const AlertCircle = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>;
+const Loader2 = (props) => <Icon {...props}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+const ImageIcon = (props) => <Icon {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></Icon>;
+const FileSpreadsheet = (props) => <Icon {...props}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></Icon>;
+const Trash2 = (props) => <Icon {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></Icon>;
+
+const categories = ['飯糰', '沙拉', '飲料', '零食', '便當', '其他'];
+// 系統環境會自動提供 API Key
+const apiKey = ""; 
+
+export default function App() {
+  const [items, setItems] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // 處理欄位變更
+  const handleInputChange = (id, field, value) => {
+    setItems(prev => prev.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ));
+  };
+
+  // 刪除單筆資料
+  const handleDelete = (id, e) => {
+    e.stopPropagation(); // 避免觸發選取事件
+    setItems(prev => prev.filter(item => item.id !== id));
+    if (selectedId === id) {
+      setSelectedId(null);
+    }
+  };
+
+  // 檔案上傳相關事件
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  const handleFileInput = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(Array.from(e.target.files));
+    }
+  };
+
+  // 檔案轉 Base64 供 API 使用
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  // 處理選擇的檔案
+  const processFiles = async (files) => {
+    const newItems = files.map(file => {
+      const id = Date.now() + Math.random();
+      return {
+        id,
+        file,
+        fileName: file.name,
+        status: 'processing',
+        category: '其他',
+        name: '',
+        servings: 1,
+        calories: '',
+        carbs: '',
+        protein: '',
+        fat: '',
+        sodium: '',
+        fiber: '',
+        weight: '',
+        isFiberEstimated: false,
+        hasWarning: false,
+        imageUrl: URL.createObjectURL(file)
+      };
+    });
+
+    setItems(prev => [...prev, ...newItems]);
+    
+    if (!selectedId && newItems.length > 0) {
+      setSelectedId(newItems[0].id);
+    }
+
+    // 逐一送去給 AI 分析
+    for (const item of newItems) {
+      await analyzeImage(item);
+    }
+  };
+
+  // 呼叫 Gemini API 解析營養標示
+  const analyzeImage = async (item) => {
+    try {
+      const base64Data = await fileToBase64(item.file);
+      
+      const promptText = `
+        這是一張食品營養標示的照片。請幫我萃取資料，並直接回傳純 JSON 格式的物件，不要加上 markdown 標記（例如 \`\`\`json）。
+        
+        計算規則：
+        1. 請特別注意「本包裝含幾份」。如果含有多份，請把各項營養素的「每份數值」乘以「份數」，算出「整包裝總和」。
+        2. 如果辨識出是蔬菜或沙拉，且標示上沒有寫「膳食纖維」，請根據淨重推估（假設每 100 克含 2.5 克纖維），並將 isFiberEstimated 設為 true。否則設為 false。
+        3. 根據產品特性從分類中挑選一個最適合的 category：飯糰、沙拉、飲料、零食、便當、其他。
+        
+        回傳 JSON 格式必須如下：
+        {
+          "category": "分類名稱",
+          "name": "推測的品項名稱",
+          "servings": 總份數(數字),
+          "calories": 總熱量(數字),
+          "carbs": 總碳水化合物(數字),
+          "protein": 總蛋白質(數字),
+          "fat": 總脂肪(數字),
+          "sodium": 總鈉量(數字),
+          "fiber": 總膳食纖維(數字，無則填0),
+          "weight": 淨重或總重量(數字，無則填0),
+          "isFiberEstimated": true或false
+        }
+      `;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: promptText },
+              { inlineData: { mimeType: item.file.type, data: base64Data } }
+            ]
+          }]
+        })
+      });
+
+      if (!response.ok) throw new Error('API 呼叫失敗');
+
+      const data = await response.json();
+      const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      
+      // 清理可能帶有的 markdown 標記
+      const cleanJsonStr = textResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsedData = JSON.parse(cleanJsonStr);
+
+      // 檢查計算邏輯是否有明顯落差 (三大營養素換算熱量 vs 標示熱量)
+      const calculatedCalories = (parsedData.carbs * 4) + (parsedData.protein * 4) + (parsedData.fat * 9);
+      const hasWarning = Math.abs(calculatedCalories - parsedData.calories) > (parsedData.calories * 0.15); // 落差超過 15% 標示警告
+
+      setItems(prev => prev.map(i => 
+        i.id === item.id ? { 
+          ...i, 
+          ...parsedData, 
+          status: hasWarning ? 'warning' : 'done',
+          hasWarning 
+        } : i
+      ));
+
+    } catch (error) {
+      console.error('分析失敗:', error);
+      setItems(prev => prev.map(i => 
+        i.id === item.id ? { ...i, status: 'warning', hasWarning: true } : i
+      ));
+    }
+  };
+
+  const selectedItem = items.find(i => i.id === selectedId);
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-800">
+      <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-10">
+        <div>
+          <h1 className="text-xl font-bold text-gray-800">營養標示批次建檔系統</h1>
+          <p className="text-sm text-gray-500 mt-1">目前專案：超商食物選擇資料庫</p>
+        </div>
+        <button 
+          className={`px-5 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${items.length > 0 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+          disabled={items.length === 0}
+        >
+          <FileSpreadsheet size={18} />
+          一鍵匯入試算表 {items.length > 0 ? `(${items.length} 筆)` : ''}
+        </button>
+      </header>
+
+      <main className="flex-1 flex overflow-hidden">
+        
+        {/* 左側：上傳區與圖片預覽 */}
+        <aside className="w-1/3 bg-white border-r flex flex-col p-4 overflow-y-auto">
+          {/* 拖放上傳區 */}
+          <div 
+            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-colors cursor-pointer mb-6 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-400'}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <UploadCloud size={40} className={`${isDragging ? 'text-blue-500' : 'text-gray-400'} mb-3`} />
+            <p className="font-medium text-gray-700">拖放照片至此，或點擊選擇檔案</p>
+            <p className="text-sm text-gray-400 mt-1">支援 JPG, PNG (可一次選取多張)</p>
+            <input 
+              type="file" 
+              multiple 
+              accept="image/jpeg, image/png" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileInput}
+            />
+          </div>
+
+          {/* 圖片預覽區 */}
+          <div className="flex-1 flex flex-col">
+            <h3 className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">原始圖片對照</h3>
+            {selectedItem ? (
+              <div className="flex-1 bg-gray-100 rounded-lg overflow-hidden border relative flex items-center justify-center">
+                <img 
+                  src={selectedItem.imageUrl} 
+                  alt="預覽圖" 
+                  className="max-w-full max-h-full object-contain"
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-2 truncate">
+                  {selectedItem.fileName}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 border border-gray-200 rounded-lg flex items-center justify-center text-gray-400 bg-gray-50">
+                <div className="text-center">
+                  <ImageIcon size={32} className="mx-auto mb-2 opacity-50" />
+                  <p>請上傳圖片或選擇右側資料</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* 右側：資料核對表格 */}
+        <section className="w-2/3 bg-gray-50 p-6 flex flex-col min-w-0">
+          {/* 加入 overflow-x-auto 解決欄位被裁切的問題 */}
+          <div className="bg-white rounded-xl shadow-sm border overflow-x-auto flex-1">
+            <table className="w-full text-left border-collapse min-w-[1100px]">
+              <thead>
+                <tr className="bg-gray-100 border-b text-sm text-gray-600">
+                  <th className="p-3 w-12 text-center sticky left-0 bg-gray-100 z-10">狀態</th>
+                  <th className="p-3 w-24">類別</th>
+                  <th className="p-3 w-40">品項名稱</th>
+                  <th className="p-3 w-16 text-center" title="AI辨識出的總份數">份數</th>
+                  <th className="p-3 min-w-[70px]">熱量<br/><span className="text-xs font-normal">(kcal)</span></th>
+                  <th className="p-3 min-w-[70px]">碳水<br/><span className="text-xs font-normal">(g)</span></th>
+                  <th className="p-3 min-w-[70px]">蛋白質<br/><span className="text-xs font-normal">(g)</span></th>
+                  <th className="p-3 min-w-[70px]">脂肪<br/><span className="text-xs font-normal">(g)</span></th>
+                  <th className="p-3 min-w-[70px]">鈉<br/><span className="text-xs font-normal">(mg)</span></th>
+                  <th className="p-3 min-w-[70px]">纖維<br/><span className="text-xs font-normal">(g)</span></th>
+                  <th className="p-3 min-w-[70px]">淨重<br/><span className="text-xs font-normal">(g)</span></th>
+                  <th className="p-3 w-12 text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td colSpan="12" className="text-center p-10 text-gray-400">
+                      尚未上傳任何資料，請從左側拖入照片
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => (
+                    <tr 
+                      key={item.id} 
+                      onClick={() => setSelectedId(item.id)}
+                      className={`border-b hover:bg-blue-50 cursor-pointer transition-colors ${selectedId === item.id ? 'bg-blue-50 border-blue-200' : ''} ${item.hasWarning ? 'bg-red-50' : ''}`}
+                    >
+                      <td className="p-3 text-center sticky left-0 z-10 bg-inherit">
+                        {item.status === 'done' && <CheckCircle2 size={18} className="text-green-500 mx-auto" />}
+                        {item.status === 'warning' && <AlertCircle size={18} className="text-red-500 mx-auto" title="數值可能有誤，請核對" />}
+                        {item.status === 'processing' && <Loader2 size={18} className="text-blue-500 mx-auto animate-spin" />}
+                      </td>
+                      <td className="p-3">
+                        <select 
+                          className="w-full bg-transparent border border-transparent hover:border-gray-200 rounded px-1 py-1 text-sm focus:ring-0 cursor-pointer"
+                          value={item.category}
+                          onChange={(e) => handleInputChange(item.id, 'category', e.target.value)}
+                        >
+                          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="text" 
+                          className="w-full bg-transparent border border-transparent hover:border-gray-200 rounded px-2 py-1 text-sm focus:border-blue-400 focus:bg-white focus:outline-none"
+                          value={item.name}
+                          onChange={(e) => handleInputChange(item.id, 'name', e.target.value)}
+                          placeholder="請輸入"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="number" 
+                          className="w-12 bg-transparent border border-transparent hover:border-gray-200 rounded px-1 py-1 text-sm text-center focus:border-blue-400 focus:bg-white focus:outline-none"
+                          value={item.servings}
+                          onChange={(e) => handleInputChange(item.id, 'servings', e.target.value)}
+                        />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" className="w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none" value={item.calories} onChange={(e) => handleInputChange(item.id, 'calories', e.target.value)} />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" className="w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none" value={item.carbs} onChange={(e) => handleInputChange(item.id, 'carbs', e.target.value)} />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" className="w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none" value={item.protein} onChange={(e) => handleInputChange(item.id, 'protein', e.target.value)} />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" className="w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none" value={item.fat} onChange={(e) => handleInputChange(item.id, 'fat', e.target.value)} />
+                      </td>
+                      <td className="p-3">
+                        <input type="number" className="w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none" value={item.sodium} onChange={(e) => handleInputChange(item.id, 'sodium', e.target.value)} />
+                      </td>
+                      <td className="p-3 relative">
+                        <input 
+                          type="number" 
+                          className={`w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none font-bold ${item.isFiberEstimated ? 'text-blue-600' : 'text-gray-800'}`} 
+                          value={item.fiber} 
+                          onChange={(e) => handleInputChange(item.id, 'fiber', e.target.value)} 
+                          title={item.isFiberEstimated ? "系統依據淨重與沙拉類別自動推估，請確認" : ""}
+                        />
+                        {item.isFiberEstimated && (
+                           <span className="absolute top-1 right-2 text-blue-500 text-[10px]">*</span>
+                        )}
+                      </td>
+                       <td className="p-3">
+                        <input type="number" className="w-full min-w-[50px] bg-transparent border-b border-transparent focus:border-gray-300 text-sm focus:outline-none text-gray-500" value={item.weight} onChange={(e) => handleInputChange(item.id, 'weight', e.target.value)} />
+                      </td>
+                      <td className="p-3 text-center">
+                        <button 
+                          onClick={(e) => handleDelete(item.id, e)}
+                          className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+                          title="刪除此筆資料"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500 shrink-0">
+            <div className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500" /> 辨識完成且邏輯正常</div>
+            <div className="flex items-center gap-2"><span className="text-blue-600 font-bold">*藍字</span> 系統依據淨重推估的纖維</div>
+            <div className="flex items-center gap-2"><AlertCircle size={16} className="text-red-500" /> 數值驗算有落差或辨識失敗</div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
