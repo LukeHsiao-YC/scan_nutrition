@@ -139,11 +139,11 @@
 
         createApp({
             setup() {
-                // 系統預設金鑰 (供右側 Canvas 預覽環境自動注入使用)
+                // ⚠️ 請保持空字串以在右側 Canvas 預覽環境中順利運行。
                 const apiKey = "";
                 
-                // 讓使用者輸入自己的金鑰 (本地端運行使用)
-                const customApiKey = ref(localStorage.getItem('gemini_api_key') || '');
+                // 讓使用者輸入自己的金鑰 (本地端運行使用)，這邊已經幫你把預設值換成你的新金鑰了
+                const customApiKey = ref(localStorage.getItem('gemini_api_key') || 'AIzaSyDlWg6QAxg4UXpRl3EwhRyuqEFdwjOd1BQ');
                 const saveKey = () => {
                     localStorage.setItem('gemini_api_key', customApiKey.value);
                 };
