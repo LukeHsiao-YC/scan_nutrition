@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-/* 內嵌 SVG 圖示元件，避免外部套件載入錯誤 */
+// 內嵌 SVG 圖示元件，避免外部套件載入錯誤
 const Icon = ({ size = 24, className = '', title, children }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     {title && <title>{title}</title>}
@@ -17,7 +17,7 @@ const FileSpreadsheet = (props) => <Icon {...props}><path d="M14 2H6a2 2 0 0 0-2
 const Trash2 = (props) => <Icon {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></Icon>;
 
 const categories = ['飯糰', '沙拉', '飲料', '零食', '便當', '其他'];
-/* 系統環境會自動提供 API Key */
+// 系統環境會自動提供 API Key
 const apiKey = ""; 
 
 export default function App() {
@@ -26,14 +26,14 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
-  /* 處理欄位變更 */
+  // 處理欄位變更
   const handleInputChange = (id, field, value) => {
     setItems(prev => prev.map(item => 
       item.id === id ? { ...item, [field]: value } : item
     ));
   };
 
-  /* 刪除單筆資料 */
+  // 刪除單筆資料
   const handleDelete = (id, e) => {
     e.stopPropagation(); 
     setItems(prev => prev.filter(item => item.id !== id));
@@ -42,7 +42,7 @@ export default function App() {
     }
   };
 
-  /* 檔案上傳相關事件 */
+  // 檔案上傳相關事件
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -66,7 +66,7 @@ export default function App() {
     }
   };
 
-  /* 檔案轉 Base64 供 API 使用 */
+  // 檔案轉 Base64 供 API 使用
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -76,7 +76,7 @@ export default function App() {
     });
   };
 
-  /* 處理選擇的檔案 */
+  // 處理選擇的檔案
   const processFiles = async (files) => {
     const newItems = files.map(file => {
       const id = Date.now() + Math.random();
@@ -107,19 +107,20 @@ export default function App() {
       setSelectedId(newItems[0].id);
     }
 
-    /* 逐一送去給 AI 分析 */
+    // 逐一送去給 AI 分析
     for (const item of newItems) {
       await analyzeImage(item);
     }
   };
 
-  /* 呼叫 API 解析營養標示 */
+  // 呼叫 API 解析營養標示
   const analyzeImage = async (item) => {
     try {
       const base64Data = await fileToBase64(item.file);
       
       const promptText = `
-        這是一張食品營養標示的照片。請幫我萃取資料，並直接回傳純 JSON 格式的物件，不要加上 markdown 標記（例如 \`\`\`json）。
+        這是一張食品營養標示的照片。請幫我萃取資料，並直接回傳純 JSON 格式的物件。
+        注意：請不要加上任何 markdown 標記，也不要把結果包在程式碼區塊裡。
         
         計算規則：
         1. 請特別注意「本包裝含幾份」。如果含有多份，請把各項營養素的「每份數值」乘以「份數」，算出「整包裝總和」。
@@ -160,11 +161,11 @@ export default function App() {
       const data = await response.json();
       const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       
-      /* 清理可能帶有的 markdown 標記 */
-      const cleanJsonStr = textResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      // 清理可能帶有的 markdown 標記 (使用安全的正則表達式避開預覽器解析錯誤)
+      const cleanJsonStr = textResponse.replace(/[`]{3}json\n?/g, '').replace(/[`]{3}\n?/g, '').trim();
       const parsedData = JSON.parse(cleanJsonStr);
 
-      /* 檢查計算邏輯是否有明顯落差，落差超過 15% 標示警告 */
+      // 檢查計算邏輯是否有明顯落差，落差超過 15% 標示警告
       const calculatedCalories = (parsedData.carbs * 4) + (parsedData.protein * 4) + (parsedData.fat * 9);
       const hasWarning = Math.abs(calculatedCalories - parsedData.calories) > (parsedData.calories * 0.15); 
 
