@@ -54,8 +54,8 @@
                             <div class="loading-spinner mb-2"></div>
                             <span class="text-[10px] font-bold text-blue-600 uppercase">辨識中</span>
                         </div>
-                        <div v-if="results[idx]?.status === 'error'" class="absolute inset-0 bg-red-50/90 flex flex-col items-center justify-center p-2">
-                            <span class="text-[10px] font-bold text-red-600 text-center leading-tight">辨識失敗<br>請檢查圖片</span>
+                        <div v-if="results[idx]?.status === 'error'" class="absolute inset-0 bg-red-50/90 flex flex-col items-center justify-center p-2 text-center">
+                            <span class="text-[10px] font-bold text-red-600 leading-tight">辨識失敗</span>
                         </div>
                     </div>
                 </div>
@@ -67,16 +67,16 @@
                     <table class="w-full text-sm min-w-[900px]">
                         <thead>
                             <tr class="bg-slate-900 text-slate-300 text-[11px] uppercase tracking-wider">
-                                <th class="p-4 text-left font-bold">品項名稱</th>
-                                <th class="p-4 w-20 text-center">份數</th>
-                                <th class="p-4 w-24 text-center text-white">總熱量</th>
-                                <th class="p-4 w-20 text-center">蛋白質</th>
-                                <th class="p-1 w-20 text-center text-white">淨重(g)</th>
-                                <th class="p-4 w-20 text-center text-white">脂肪</th>
-                                <th class="p-4 w-20 text-center text-white">碳水</th>
-                                <th class="p-4 w-20 text-center">鈉</th>
-                                <th class="p-4 w-32 text-center">蔬菜推估</th>
-                                <th class="p-4 w-20 text-center text-purple-300">纖維</th>
+                                <th class="p-4 text-left font-bold w-48">品項名稱 / 錯誤訊息</th>
+                                <th class="p-4 w-16 text-center">份數</th>
+                                <th class="p-4 w-20 text-center text-white">總熱量</th>
+                                <th class="p-4 w-16 text-center">蛋白質</th>
+                                <th class="p-1 w-16 text-center text-white">淨重(g)</th>
+                                <th class="p-4 w-16 text-center text-white">脂肪</th>
+                                <th class="p-4 w-16 text-center text-white">碳水</th>
+                                <th class="p-4 w-16 text-center">鈉</th>
+                                <th class="p-4 w-24 text-center">蔬菜推估</th>
+                                <th class="p-4 w-16 text-center text-purple-300">纖維</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -84,24 +84,27 @@
                                 @click="selectedIdx = idx"
                                 :class="['transition-colors', selectedIdx === idx ? 'bg-blue-50/50' : 'hover:bg-slate-50']">
                                 <td class="p-2">
-                                    <input v-model="item.name" class="w-full p-2 bg-white rounded-lg border-transparent hover:border-slate-200" :title="item.errorMsg">
+                                    <input v-if="item.status !== 'error'" v-model="item.name" class="w-full p-2 bg-white rounded-lg border-transparent hover:border-slate-200">
+                                    <div v-else class="w-full p-2 bg-red-50 rounded-lg text-red-600 text-xs font-bold leading-tight break-all">
+                                        {{ item.errorMsg }}
+                                    </div>
                                 </td>
-                                <td class="p-2 text-center"><input v-model.number="item.portions" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg font-bold"></td>
-                                <td class="p-2"><input v-model.number="item.calories" class="w-full p-2 text-center bg-white rounded-lg font-black text-orange-600" :class="{'is-warning': item.calError}"></td>
-                                <td class="p-2"><input v-model.number="item.protein" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg"></td>
-                                <td class="p-2"><input v-model.number="item.netWeight" @input="reCalc(idx)" class="w-full p-2 text-center bg-slate-100 rounded-lg font-bold"></td>
-                                <td class="p-2"><input v-model.number="item.fat" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg"></td>
-                                <td class="p-2"><input v-model.number="item.carbs" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg"></td>
-                                <td class="p-2"><input v-model.number="item.sodium" class="w-full p-2 text-center bg-white rounded-lg text-blue-600"></td>
+                                <td class="p-2 text-center"><input v-model.number="item.portions" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg font-bold" :disabled="item.status === 'error'"></td>
+                                <td class="p-2"><input v-model.number="item.calories" class="w-full p-2 text-center bg-white rounded-lg font-black text-orange-600" :class="{'is-warning': item.calError}" :disabled="item.status === 'error'"></td>
+                                <td class="p-2"><input v-model.number="item.protein" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg" :disabled="item.status === 'error'"></td>
+                                <td class="p-2"><input v-model.number="item.netWeight" @input="reCalc(idx)" class="w-full p-2 text-center bg-slate-100 rounded-lg font-bold" :disabled="item.status === 'error'"></td>
+                                <td class="p-2"><input v-model.number="item.fat" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg" :disabled="item.status === 'error'"></td>
+                                <td class="p-2"><input v-model.number="item.carbs" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg" :disabled="item.status === 'error'"></td>
+                                <td class="p-2"><input v-model.number="item.sodium" class="w-full p-2 text-center bg-white rounded-lg text-blue-600" :disabled="item.status === 'error'"></td>
                                 <td class="p-2">
-                                    <select v-model="item.vegType" @change="reCalc(idx)" class="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
+                                    <select v-model="item.vegType" @change="reCalc(idx)" class="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600" :disabled="item.status === 'error'">
                                         <option value="none">標示已有</option>
                                         <option value="raw">生菜(2%)</option>
                                         <option value="cooked">熟菜(3%)</option>
                                     </select>
                                 </td>
                                 <td class="p-2">
-                                    <input v-model.number="item.fiber" class="w-full p-2 text-center bg-white rounded-lg font-black text-purple-600 border-2" :class="{'is-estimated': item.fiberEstimated}">
+                                    <input v-model.number="item.fiber" class="w-full p-2 text-center bg-white rounded-lg font-black text-purple-600 border-2" :class="{'is-estimated': item.fiberEstimated}" :disabled="item.status === 'error'">
                                 </td>
                             </tr>
                         </tbody>
@@ -144,6 +147,36 @@
                     });
                 };
 
+                // 壓縮圖片函數：把過大的照片縮小到最大邊長 1024px，可大幅降低 payload 太大的錯誤
+                const compressImage = (file) => {
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const maxSize = 1024;
+                            
+                            if (width > height && width > maxSize) {
+                                height *= maxSize / width;
+                                width = maxSize;
+                            } else if (height > maxSize) {
+                                width *= maxSize / height;
+                                height = maxSize;
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            // 轉為 jpeg 並設定 80% 品質
+                            resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+                        };
+                        img.onerror = reject;
+                        img.src = URL.createObjectURL(file);
+                    });
+                };
+
                 const fetchWithBackoff = async (url, options, retries = 3) => {
                     let delay = 1500;
                     for (let i = 0; i < retries; i++) {
@@ -164,12 +197,8 @@
 
                 const processImage = async (file, index) => {
                     try {
-                        const reader = new FileReader();
-                        const base64Promise = new Promise((resolve) => {
-                            reader.onload = () => resolve(reader.result.split(',')[1]);
-                            reader.readAsDataURL(file);
-                        });
-                        const base64Data = await base64Promise;
+                        // 使用壓縮後的 base64，避免原圖太大被 API 拒絕
+                        const base64Data = await compressImage(file);
 
                         const prompt = `你是一位專業的台灣食品營養標示判讀專家。請仔細讀取圖片。
                         
@@ -207,11 +236,12 @@
                                 role: "user",
                                 parts: [
                                     { text: prompt }, 
-                                    { inlineData: { mimeType: file.type || "image/jpeg", data: base64Data } }
+                                    { inlineData: { mimeType: "image/jpeg", data: base64Data } }
                                 ] 
                             }]
                         };
 
+                        // 使用預覽環境唯一支援的 gemini-2.5-flash-preview-09-2025 模型
                         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
                         const data = await fetchWithBackoff(url, {
                             method: 'POST',
@@ -239,15 +269,17 @@
                         };
                         checkError(index);
                     } catch (err) {
-                        console.error(err);
-                        results.value[index].name = "辨識失敗，點擊縮圖重試";
-                        results.value[index].errorMsg = err.message;
+                        console.error("解析錯誤詳情:", err);
+                        results.value[index].name = "辨識失敗";
+                        // 直接將詳細錯誤顯示出來，不再隱藏
+                        results.value[index].errorMsg = err.message || "未知網路錯誤或 API 阻擋";
                         results.value[index].status = "error";
                     }
                 };
 
                 const reCalc = (idx) => {
                     const item = results.value[idx];
+                    if (item.status === 'error') return;
                     if (item.vegType === 'raw') {
                         item.fiber = parseFloat((item.netWeight * 0.02).toFixed(1));
                         item.fiberEstimated = true;
@@ -262,6 +294,7 @@
 
                 const checkError = (idx) => {
                     const item = results.value[idx];
+                    if (item.status === 'error') return;
                     const calcCal = (item.protein * 4) + (item.carbs * 4) + (item.fat * 9);
                     item.calError = Math.abs(calcCal - item.calories) > (item.calories * 0.2);
                 };
