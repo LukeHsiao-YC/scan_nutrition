@@ -25,21 +25,30 @@
             </div>
             
             <div class="flex flex-col items-end gap-3 mt-4 md:mt-0">
-                <div class="flex items-center gap-3 w-full md:w-auto">
-                    <!-- API Key 輸入框 (本地端使用) -->
-                    <div class="relative group">
+                <div class="flex items-stretch gap-3 w-full md:w-auto">
+                    <!-- 設定輸入框群組 (本地端使用) -->
+                    <div class="flex flex-col gap-2 relative group z-50">
                         <input type="password" 
                                v-model="customApiKey" 
-                               @change="saveKey" 
-                               placeholder="貼上個人 API Key (本地用)" 
-                               class="text-xs p-2.5 rounded-xl border border-slate-300 w-48 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all">
-                        <div class="absolute -bottom-8 right-0 bg-slate-800 text-white text-[10px] p-2 rounded hidden group-hover:block whitespace-nowrap z-50">
-                            若下載至本地電腦執行，請填寫金鑰
+                               @change="saveSettings" 
+                               placeholder="貼上個人 API Key" 
+                               class="text-xs p-2 rounded-lg border border-slate-300 w-56 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all outline-none">
+                        
+                        <input type="text" 
+                               v-model="customScriptUrl" 
+                               @change="saveSettings" 
+                               placeholder="貼上 Apps Script 網址 (包含 /exec)" 
+                               class="text-xs p-2 rounded-lg border border-slate-300 w-56 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all outline-none">
+                               
+                        <div class="absolute -bottom-10 right-0 bg-slate-800 text-white text-[11px] px-3 py-2 rounded hidden group-hover:block whitespace-nowrap shadow-lg">
+                            只要填寫過一次，下次開啟會自動記住喔！
                         </div>
                     </div>
                     
-                    <button @click="exportToSheet" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all transform hover:-translate-y-1 text-sm whitespace-nowrap">
-                        一鍵同步至 Google
+                    <button @click="exportToSheet" 
+                            :disabled="isExporting" 
+                            class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all transform hover:-translate-y-1 text-sm whitespace-nowrap flex items-center justify-center min-w-[140px]">
+                        {{ isExporting ? '努力傳送中...' : '一鍵同步至 Google' }}
                     </button>
                 </div>
                 
@@ -139,13 +148,16 @@
 
         createApp({
             setup() {
-                // ⚠️ 請保持空字串以在右側 Canvas 預覽環境中順利運行。
-                const apiKey = "";
+                const apiKey = ""; // 供右側 Canvas 預覽環境自動注入
                 
-                // 讓使用者輸入自己的金鑰 (本地端運行使用)，這邊已經幫你把預設值換成你的新金鑰了
+                // 本地端運行用的設定值
                 const customApiKey = ref(localStorage.getItem('gemini_api_key') || 'AIzaSyDlWg6QAxg4UXpRl3EwhRyuqEFdwjOd1BQ');
-                const saveKey = () => {
+                const customScriptUrl = ref(localStorage.getItem('gemini_script_url') || 'https://script.google.com/macros/s/AKfycbzAN311kTYImaJlad5w_CH6U8IGzJ1nknCDj6uuZvToczWlcCOhBmGEQNkdfabq2exi/exec');
+                const isExporting = ref(false);
+
+                const saveSettings = () => {
                     localStorage.setItem('gemini_api_key', customApiKey.value);
+                    localStorage.setItem('gemini_script_url', customScriptUrl.value);
                 };
 
                 const images = ref([]);
@@ -170,7 +182,7 @@
                     });
                 };
 
-                // 壓縮圖片：避免原圖太大被 API 拒絕
+                // 壓縮圖片
                 const compressImage = (file) => {
                     return new Promise((resolve, reject) => {
                         const img = new Image();
@@ -262,11 +274,8 @@
                             }]
                         };
 
-                        // --- 智慧網址切換邏輯 ---
-                        // 1. 預設使用 Canvas 環境要求的專屬模型與寫法
                         let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
                         
-                        // 2. 如果使用者有在介面填寫個人金鑰，則切換為公開版模型 (本地端執行防報錯)
                         if (customApiKey.value) {
                             url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${customApiKey.value}`;
                         }
@@ -300,7 +309,6 @@
                         console.error("解析錯誤詳情:", err);
                         results.value[index].name = "辨識失敗";
                         
-                        // 偵測是否為金鑰未填寫的錯誤，給予友善提示
                         if (err.message && err.message.includes('unregistered callers') && !customApiKey.value) {
                             results.value[index].errorMsg = "請在右上角填寫您的 API Key";
                         } else {
@@ -334,11 +342,48 @@
                 };
 
                 const exportToSheet = async () => {
-                    alert('匯入功能需先設定 Apps Script URL。目前可先手動複製表格數據。');
+                    if (!customScriptUrl.value || !customScriptUrl.value.includes('exec')) {
+                        alert('請先在畫面上方填寫正確的 Apps Script 網址喔！');
+                        return;
+                    }
+
+                    // 過濾掉還在讀取或是發生錯誤的資料
+                    const validData = results.value.filter(r => r.status === 'done' && r.name !== '讀取中...' && r.name !== '未知名稱');
+                    
+                    if (validData.length === 0) {
+                        alert('目前沒有辨識成功的資料可以匯出喔！');
+                        return;
+                    }
+
+                    isExporting.value = true;
+
+                    try {
+                        // 使用 text/plain 格式發送，巧妙避開瀏覽器嚴格的 CORS 檢查
+                        const response = await fetch(customScriptUrl.value, { 
+                            method: 'POST', 
+                            body: JSON.stringify(validData),
+                            headers: {
+                                'Content-Type': 'text/plain;charset=utf-8',
+                            }
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.status === 'success') {
+                            alert(`太棒了！成功將 ${validData.length} 筆資料同步到 Google 試算表。`);
+                        } else {
+                            alert('發生了一點錯誤：' + result.message);
+                        }
+                    } catch (e) { 
+                        console.error(e);
+                        alert('同步失敗，請檢查網路連線或是 Apps Script 權限。'); 
+                    } finally {
+                        isExporting.value = false;
+                    }
                 };
 
                 return { 
-                    customApiKey, saveKey, 
+                    customApiKey, customScriptUrl, saveSettings, isExporting,
                     images, results, selectedIdx, finishedCount, 
                     handleUpload, reCalc, exportToSheet 
                 };
