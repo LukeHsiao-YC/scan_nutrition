@@ -60,8 +60,8 @@
 
             <!-- 右側：編輯表格 -->
             <div class="lg:col-span-9">
-                <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
-                    <table class="w-full text-sm">
+                <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-sm min-w-[900px]">
                         <thead>
                             <tr class="bg-slate-900 text-slate-300 text-[11px] uppercase tracking-wider">
                                 <th class="p-4 text-left font-bold">品項名稱 (可修改)</th>
@@ -115,7 +115,8 @@
 
         createApp({
             setup() {
-                const API_KEY = 'AIzaSyC063KgxLEHg645bX_tz1TXCgS30xI-SS4';
+                // 系統會自動帶入正確的 Key，留空即可
+                const API_KEY = "";
                 const images = ref([]);
                 const results = ref([]);
                 const selectedIdx = ref(null);
@@ -142,34 +143,59 @@
                         const base64 = await toBase64(file);
                         const base64Data = base64.split(',')[1];
 
-                        // 優化過的 Prompt：更嚴格的指令
-                        const prompt = `你是營養標示 OCR 專家。請分析這張台灣食品標示圖：
-                        1. 尋找「每一份量」的數值。
-                        2. 尋找「本包裝含幾份」(portions)。
-                        3. 提取品項名稱(name)。
-                        4. 提取【每一份量】欄位下的：熱量(p_cal), 蛋白質(p_pro), 脂肪(p_fat), 碳水(p_carb), 鈉(p_sod), 膳食纖維(p_fib)。
-                        重要：忽略「每100公克」欄位。
-                        請只回傳 JSON 物件，不要任何說明文字：
-                        {"name": "...", "portions": 1.0, "netWeight": 100, "p_cal": 0, "p_pro": 0, "p_fat": 0, "p_carb": 0, "p_sod": 0, "p_fib": 0}`;
+                        // 優化過的 Prompt：更彈性、更精準的邏輯
+                        const prompt = `你是一位專業的台灣食品營養標示判讀專家。請仔細讀取圖片中的營養標示與包裝資訊。
+                        
+                        判讀規則：
+                        1. 提取品項名稱 (name)。
+                        2. 尋找「本包裝含幾份」(portions)。如果沒有明確寫出，請嘗試用總重量除以每一份量來計算。如果算不出來，預設填 1。
+                        3. 尋找產品的「總淨重或容量」(netWeight)，單位通常是公克(g)或毫升(ml)。
+                        4. 提取【每一份量】欄位下的營養數值：熱量(p_cal)、蛋白質(p_pro)、脂肪(p_fat)、碳水化合物(p_carb)、鈉(p_sod)、膳食纖維(p_fib)。
+                        5. 🚨 重要警告：如果標示上只有「每 100 公克/毫升」的數值，請你務必根據總淨重，自動幫我換算出「每一份量」的數值再填入。
+                        6. 膳食纖維如果沒有標示，請直接填 0。`;
 
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                        // 升級至最新模型，並強制要求 JSON 格式回傳，避免多餘文字干擾
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Data } }] }]
+                                generationConfig: {
+                                    responseMimeType: "application/json",
+                                    responseSchema: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            name: { type: "STRING" },
+                                            portions: { type: "NUMBER" },
+                                            netWeight: { type: "NUMBER" },
+                                            p_cal: { type: "NUMBER" },
+                                            p_pro: { type: "NUMBER" },
+                                            p_fat: { type: "NUMBER" },
+                                            p_carb: { type: "NUMBER" },
+                                            p_sod: { type: "NUMBER" },
+                                            p_fib: { type: "NUMBER" }
+                                        },
+                                        required: ["name", "portions", "netWeight", "p_cal", "p_pro", "p_fat", "p_carb", "p_sod", "p_fib"]
+                                    }
+                                },
+                                contents: [{ 
+                                    parts: [
+                                        { text: prompt }, 
+                                        // 注意：新版 API 參數名稱為駝峰式 (inlineData, mimeType)
+                                        { inlineData: { mimeType: file.type || "image/jpeg", data: base64Data } }
+                                    ] 
+                                }]
                             })
                         });
+
+                        if (!response.ok) throw new Error('API 請求失敗，請檢查網路或金鑰');
 
                         const data = await response.json();
                         const rawText = data.candidates[0].content.parts[0].text;
                         
-                        // 強大的 JSON 提取正則表達式，防止 AI 多廢話
-                        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                        if (!jsonMatch) throw new Error("Format Error");
-                        
-                        const res = JSON.parse(jsonMatch[0]);
+                        // 因為已經指定了 JSON Schema，回傳的絕對會是乾淨的 JSON，直接解析即可
+                        const res = JSON.parse(rawText);
 
-                        // 將「每份」乘以「總份數」
+                        // 結算：將 AI 解析出來的「每份」乘以「總份數」填入前端表格
                         const p = parseFloat(res.portions) || 1;
                         results.value[index] = {
                             name: res.name || "未知名稱",
@@ -187,7 +213,7 @@
                         };
                         checkError(index);
                     } catch (err) {
-                        console.error(err);
+                        console.error("解析過程發生錯誤：", err);
                         results.value[index].name = "辨識失敗，請手動補齊";
                         results.value[index].status = "done";
                     }
@@ -196,10 +222,10 @@
                 const reCalc = (idx) => {
                     const item = results.value[idx];
                     if (item.vegType === 'raw') {
-                        item.fiber = (item.netWeight * 0.02).toFixed(1);
+                        item.fiber = parseFloat((item.netWeight * 0.02).toFixed(1));
                         item.fiberEstimated = true;
                     } else if (item.vegType === 'cooked') {
-                        item.fiber = (item.netWeight * 0.03).toFixed(1);
+                        item.fiber = parseFloat((item.netWeight * 0.03).toFixed(1));
                         item.fiberEstimated = true;
                     } else {
                         item.fiberEstimated = false;
@@ -222,7 +248,7 @@
 
                 const exportToSheet = async () => {
                     const scriptUrl = '你的_APPS_SCRIPT_URL';
-                    if(!scriptUrl.includes('exec')) return alert('請先設定 Google Apps Script URL (前次對話步驟提到的)');
+                    if(!scriptUrl.includes('exec')) return alert('請先設定 Google Apps Script URL');
                     try {
                         const response = await fetch(scriptUrl, { 
                             method: 'POST', 
