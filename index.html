@@ -123,8 +123,10 @@
 
         createApp({
             setup() {
-                // 已更新為你的個人金鑰
-                const apiKey = "AIzaSyDuWcZawOhKRXmuPMGE6NP0ZmAMCePl3a4";
+                // ⚠️ 請保持空字串以在右側 Canvas 預覽環境中順利運行。
+                // 如果您下載此檔案到本地電腦，請再填入您的金鑰 (例如: "AIzaSyDuWcZawOhKRXmuPMGE6NP0ZmAMCePl3a4")
+                const apiKey = "";
+                
                 const images = ref([]);
                 const results = ref([]);
                 const selectedIdx = ref(null);
@@ -197,7 +199,6 @@
 
                 const processImage = async (file, index) => {
                     try {
-                        // 使用壓縮後的 base64，避免原圖太大被 API 拒絕
                         const base64Data = await compressImage(file);
 
                         const prompt = `你是一位專業的台灣食品營養標示判讀專家。請仔細讀取圖片。
@@ -241,8 +242,10 @@
                             }]
                         };
 
-                        // 使用預覽環境唯一支援的 gemini-2.5-flash-preview-09-2025 模型
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                        // 自動判斷機制：若有填寫個人金鑰，則切換為公開版模型；若為空字串，則使用預覽環境專用內部模型
+                        const modelVersion = apiKey ? "gemini-2.5-flash" : "gemini-2.5-flash-preview-09-2025";
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${apiKey}`;
+                        
                         const data = await fetchWithBackoff(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -271,7 +274,6 @@
                     } catch (err) {
                         console.error("解析錯誤詳情:", err);
                         results.value[index].name = "辨識失敗";
-                        // 直接將詳細錯誤顯示出來，不再隱藏
                         results.value[index].errorMsg = err.message || "未知網路錯誤或 API 阻擋";
                         results.value[index].status = "error";
                     }
