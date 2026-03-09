@@ -18,19 +18,35 @@
 <body class="bg-slate-50 min-h-screen font-sans text-slate-900">
     <div id="app" class="p-4 max-w-[1600px] mx-auto">
         <!-- Header 區塊 -->
-        <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div>
                 <h1 class="text-3xl font-black text-slate-800 tracking-tight">🍎 AI 營養辨識系統 <span class="text-blue-600 text-lg">V3</span></h1>
-                <p class="text-slate-500 font-medium">針對台灣超商標示優化 | 自動計算總量 | 纖維推估</p>
+                <p class="text-slate-500 font-medium mt-1">針對台灣超商標示優化 | 自動計算總量 | 纖維推估</p>
             </div>
-            <div class="flex gap-4 mt-4 md:mt-0">
-                <div class="bg-slate-100 px-4 py-2 rounded-xl text-center">
-                    <p class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">目前進度</p>
-                    <p class="font-black text-xl text-blue-600">{{ finishedCount }} / {{ images.length }}</p>
+            
+            <div class="flex flex-col items-end gap-3 mt-4 md:mt-0">
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <!-- API Key 輸入框 (本地端使用) -->
+                    <div class="relative group">
+                        <input type="password" 
+                               v-model="customApiKey" 
+                               @change="saveKey" 
+                               placeholder="貼上個人 API Key (本地用)" 
+                               class="text-xs p-2.5 rounded-xl border border-slate-300 w-48 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all">
+                        <div class="absolute -bottom-8 right-0 bg-slate-800 text-white text-[10px] p-2 rounded hidden group-hover:block whitespace-nowrap z-50">
+                            若下載至本地電腦執行，請填寫金鑰
+                        </div>
+                    </div>
+                    
+                    <button @click="exportToSheet" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all transform hover:-translate-y-1 text-sm whitespace-nowrap">
+                        一鍵同步至 Google
+                    </button>
                 </div>
-                <button @click="exportToSheet" class="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all transform hover:-translate-y-1">
-                    一鍵同步至 Google
-                </button>
+                
+                <div class="bg-slate-100 px-4 py-1.5 rounded-lg text-center flex items-center justify-center gap-2 w-full md:w-auto">
+                    <span class="text-[10px] uppercase tracking-widest text-slate-500 font-bold">目前進度</span>
+                    <span class="font-black text-lg text-blue-600">{{ finishedCount }} / {{ images.length }}</span>
+                </div>
             </div>
         </header>
 
@@ -52,7 +68,7 @@
                         <img :src="img.url" class="w-full h-32 object-cover">
                         <div v-if="results[idx]?.status === 'processing'" class="absolute inset-0 bg-white/80 flex flex-col items-center justify-center">
                             <div class="loading-spinner mb-2"></div>
-                            <span class="text-[10px] font-bold text-blue-600 uppercase">辨識中</span>
+                            <span class="text-[10px] font-bold text-blue-600 uppercase mt-2">辨識中</span>
                         </div>
                         <div v-if="results[idx]?.status === 'error'" class="absolute inset-0 bg-red-50/90 flex flex-col items-center justify-center p-2 text-center">
                             <span class="text-[10px] font-bold text-red-600 leading-tight">辨識失敗</span>
@@ -123,10 +139,15 @@
 
         createApp({
             setup() {
-                // ⚠️ 請保持空字串以在右側 Canvas 預覽環境中順利運行。
-                // 如果您下載此檔案到本地電腦，請再填入您的金鑰 (例如: "AIzaSyDuWcZawOhKRXmuPMGE6NP0ZmAMCePl3a4")
+                // 系統預設金鑰 (供右側 Canvas 預覽環境自動注入使用)
                 const apiKey = "";
                 
+                // 讓使用者輸入自己的金鑰 (本地端運行使用)
+                const customApiKey = ref(localStorage.getItem('gemini_api_key') || '');
+                const saveKey = () => {
+                    localStorage.setItem('gemini_api_key', customApiKey.value);
+                };
+
                 const images = ref([]);
                 const results = ref([]);
                 const selectedIdx = ref(null);
@@ -149,7 +170,7 @@
                     });
                 };
 
-                // 壓縮圖片函數：把過大的照片縮小到最大邊長 1024px，可大幅降低 payload 太大的錯誤
+                // 壓縮圖片：避免原圖太大被 API 拒絕
                 const compressImage = (file) => {
                     return new Promise((resolve, reject) => {
                         const img = new Image();
@@ -171,7 +192,6 @@
                             canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            // 轉為 jpeg 並設定 80% 品質
                             resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
                         };
                         img.onerror = reject;
@@ -242,10 +262,15 @@
                             }]
                         };
 
-                        // 自動判斷機制：若有填寫個人金鑰，則切換為公開版模型；若為空字串，則使用預覽環境專用內部模型
-                        const modelVersion = apiKey ? "gemini-2.5-flash" : "gemini-2.5-flash-preview-09-2025";
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${apiKey}`;
+                        // --- 智慧網址切換邏輯 ---
+                        // 1. 預設使用 Canvas 環境要求的專屬模型與寫法
+                        let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
                         
+                        // 2. 如果使用者有在介面填寫個人金鑰，則切換為公開版模型 (本地端執行防報錯)
+                        if (customApiKey.value) {
+                            url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${customApiKey.value}`;
+                        }
+
                         const data = await fetchWithBackoff(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -274,7 +299,14 @@
                     } catch (err) {
                         console.error("解析錯誤詳情:", err);
                         results.value[index].name = "辨識失敗";
-                        results.value[index].errorMsg = err.message || "未知網路錯誤或 API 阻擋";
+                        
+                        // 偵測是否為金鑰未填寫的錯誤，給予友善提示
+                        if (err.message && err.message.includes('unregistered callers') && !customApiKey.value) {
+                            results.value[index].errorMsg = "請在右上角填寫您的 API Key";
+                        } else {
+                            results.value[index].errorMsg = err.message || "未知網路錯誤或 API 阻擋";
+                        }
+                        
                         results.value[index].status = "error";
                     }
                 };
@@ -305,7 +337,11 @@
                     alert('匯入功能需先設定 Apps Script URL。目前可先手動複製表格數據。');
                 };
 
-                return { images, results, selectedIdx, finishedCount, handleUpload, reCalc, exportToSheet };
+                return { 
+                    customApiKey, saveKey, 
+                    images, results, selectedIdx, finishedCount, 
+                    handleUpload, reCalc, exportToSheet 
+                };
             }
         }).mount('#app');
     </script>
