@@ -3,51 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極速 AI 營養標示輸入 (V3 - 高準確版)</title>
+    <title>極速 AI 營養標示輸入 (V3)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
         .is-warning { background-color: #fee2e2; border: 2px solid #ef4444 !important; }
         .is-estimated { background-color: #f5f3ff; color: #7c3aed; font-weight: bold; border: 2px solid #ddd6fe !important; }
-        input { transition: all 0.2s; border: 1px solid #e2e8f0; }
-        input:focus { background-color: #fff7ed; border-color: #fb923c; outline: none; box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.2); }
+        input, select { transition: all 0.2s; border: 1px solid #e2e8f0; }
+        input:focus, select:focus { background-color: #fff7ed; border-color: #fb923c; outline: none; box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.2); }
         .loading-spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen font-sans text-slate-900">
     <div id="app" class="p-4 max-w-[1600px] mx-auto">
-        <!-- Header 區塊 -->
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div>
-                <h1 class="text-3xl font-black text-slate-800 tracking-tight">🍎 AI 營養辨識系統 <span class="text-blue-600 text-lg">V3</span></h1>
+                <h1 class="text-3xl font-black text-slate-800 tracking-tight">AI 營養辨識系統 <span class="text-blue-600 text-lg">V3</span></h1>
                 <p class="text-slate-500 font-medium mt-1">針對台灣超商標示優化 | 自動計算總量 | 纖維推估</p>
             </div>
             
             <div class="flex flex-col items-end gap-3 mt-4 md:mt-0">
-                <div class="flex items-stretch gap-3 w-full md:w-auto">
-                    <!-- 設定輸入框群組 (本地端使用) -->
+                <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
                     <div class="flex flex-col gap-2 relative group z-50">
                         <input type="password" 
                                v-model="customApiKey" 
                                @change="saveSettings" 
                                placeholder="貼上個人 API Key" 
-                               class="text-xs p-2 rounded-lg border border-slate-300 w-56 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all outline-none">
+                               class="text-xs p-2 rounded-lg border border-slate-300 w-full md:w-56 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all outline-none">
                         
                         <input type="text" 
                                v-model="customScriptUrl" 
                                @change="saveSettings" 
-                               placeholder="貼上 Apps Script 網址 (包含 /exec)" 
-                               class="text-xs p-2 rounded-lg border border-slate-300 w-56 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all outline-none">
+                               placeholder="貼上 Apps Script 網址" 
+                               class="text-xs p-2 rounded-lg border border-slate-300 w-full md:w-56 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all outline-none">
                                
                         <div class="absolute -bottom-10 right-0 bg-slate-800 text-white text-[11px] px-3 py-2 rounded hidden group-hover:block whitespace-nowrap shadow-lg">
-                            只要填寫過一次，下次開啟會自動記住喔！
+                            金鑰會存在你的瀏覽器，不會外洩
                         </div>
                     </div>
                     
                     <button @click="exportToSheet" 
                             :disabled="isExporting" 
-                            class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all transform hover:-translate-y-1 text-sm whitespace-nowrap flex items-center justify-center min-w-[140px]">
+                            class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 py-2 md:py-0 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all transform hover:-translate-y-1 text-sm whitespace-nowrap flex items-center justify-center min-w-[140px] h-full min-h-[40px]">
                         {{ isExporting ? '努力傳送中...' : '一鍵同步至 Google' }}
                     </button>
                 </div>
@@ -60,7 +58,6 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <!-- 左側：上傳與縮圖 -->
             <div class="lg:col-span-3 space-y-4">
                 <div class="border-4 border-dashed border-slate-200 rounded-3xl p-10 text-center bg-white hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer group"
                      @click="$refs.fileInput.click()">
@@ -86,13 +83,14 @@
                 </div>
             </div>
 
-            <!-- 右側：編輯表格區 -->
             <div class="lg:col-span-9">
                 <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-x-auto">
-                    <table class="w-full text-sm min-w-[900px]">
+                    <table class="w-full text-sm min-w-[1050px]">
                         <thead>
                             <tr class="bg-slate-900 text-slate-300 text-[11px] uppercase tracking-wider">
                                 <th class="p-4 text-left font-bold w-48">品項名稱 / 錯誤訊息</th>
+                                <th class="p-4 w-28 text-center">類別</th>
+                                <th class="p-4 w-16 text-center">價格</th>
                                 <th class="p-4 w-16 text-center">份數</th>
                                 <th class="p-4 w-20 text-center text-white">總熱量</th>
                                 <th class="p-4 w-16 text-center">蛋白質</th>
@@ -114,6 +112,17 @@
                                         {{ item.errorMsg }}
                                     </div>
                                 </td>
+                                <td class="p-2">
+                                    <select v-model="item.category" class="w-full p-2 bg-white rounded-lg text-xs" :disabled="item.status === 'error'">
+                                        <option value="飯/便當類">飯/便當類</option>
+                                        <option value="麵食類">麵食類</option>
+                                        <option value="沙拉/輕食">沙拉/輕食</option>
+                                        <option value="飲料">飲料</option>
+                                        <option value="點心/零食">點心/零食</option>
+                                        <option value="其他">其他</option>
+                                    </select>
+                                </td>
+                                <td class="p-2 text-center"><input v-model.number="item.price" placeholder="$" class="w-full p-2 text-center bg-white rounded-lg" :disabled="item.status === 'error'"></td>
                                 <td class="p-2 text-center"><input v-model.number="item.portions" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg font-bold" :disabled="item.status === 'error'"></td>
                                 <td class="p-2"><input v-model.number="item.calories" class="w-full p-2 text-center bg-white rounded-lg font-black text-orange-600" :class="{'is-warning': item.calError}" :disabled="item.status === 'error'"></td>
                                 <td class="p-2"><input v-model.number="item.protein" @input="reCalc(idx)" class="w-full p-2 text-center bg-white rounded-lg" :disabled="item.status === 'error'"></td>
@@ -148,10 +157,10 @@
 
         createApp({
             setup() {
-                const apiKey = ""; // 供右側 Canvas 預覽環境自動注入
+                const apiKey = ""; 
                 
-                // 本地端運行用的設定值
-                const customApiKey = ref(localStorage.getItem('gemini_api_key') || 'AIzaSyDlWg6QAxg4UXpRl3EwhRyuqEFdwjOd1BQ');
+                // 這裡把金鑰預設值清空，確保不會再上傳外洩
+                const customApiKey = ref(localStorage.getItem('gemini_api_key') || '');
                 const customScriptUrl = ref(localStorage.getItem('gemini_script_url') || 'https://script.google.com/macros/s/AKfycbzAN311kTYImaJlad5w_CH6U8IGzJ1nknCDj6uuZvToczWlcCOhBmGEQNkdfabq2exi/exec');
                 const isExporting = ref(false);
 
@@ -173,7 +182,7 @@
                         const idx = images.value.length;
                         images.value.push({ url, file });
                         results.value.push({ 
-                            name: '讀取中...', portions: 1, netWeight: 0, calories: 0, 
+                            name: '讀取中...', category: '其他', price: '', portions: 1, netWeight: 0, calories: 0, 
                             protein: 0, fat: 0, carbs: 0, sodium: 0, fiber: 0, 
                             status: 'processing', vegType: 'none', fiberEstimated: false,
                             errorMsg: ''
@@ -182,7 +191,6 @@
                     });
                 };
 
-                // 壓縮圖片
                 const compressImage = (file) => {
                     return new Promise((resolve, reject) => {
                         const img = new Image();
@@ -243,6 +251,7 @@
                         5. 輸出數值：
                            - 如果只有每 100g 數據，請根據淨重換算出總份量的數據。
                            - 所有營養素回傳該品項「整包裝」的總量。
+                        6. 根據產品推斷最合適的分類 (category)，只能從以下選項中擇一填入：'飯/便當類', '麵食類', '沙拉/輕食', '飲料', '點心/零食', '其他'。
                         
                         請回傳 JSON 格式。`;
 
@@ -253,6 +262,7 @@
                                     type: "OBJECT",
                                     properties: {
                                         name: { type: "STRING" },
+                                        category: { type: "STRING" },
                                         portions: { type: "NUMBER" },
                                         netWeight: { type: "NUMBER" },
                                         total_calories: { type: "NUMBER" },
@@ -262,7 +272,7 @@
                                         total_sodium: { type: "NUMBER" },
                                         total_fiber: { type: "NUMBER" }
                                     },
-                                    required: ["name", "portions", "netWeight", "total_calories", "total_protein", "total_fat", "total_carb", "total_sodium", "total_fiber"]
+                                    required: ["name", "category", "portions", "netWeight", "total_calories", "total_protein", "total_fat", "total_carb", "total_sodium", "total_fiber"]
                                 }
                             },
                             contents: [{ 
@@ -278,6 +288,8 @@
                         
                         if (customApiKey.value) {
                             url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${customApiKey.value}`;
+                        } else if (!apiKey) {
+                            throw new Error("請先在右上角填寫您的 API Key");
                         }
 
                         const data = await fetchWithBackoff(url, {
@@ -290,6 +302,8 @@
 
                         results.value[index] = {
                             name: res.name || "未知名稱",
+                            category: res.category || "其他",
+                            price: '', 
                             portions: res.portions || 1,
                             netWeight: res.netWeight || 0,
                             calories: res.total_calories,
@@ -308,13 +322,7 @@
                     } catch (err) {
                         console.error("解析錯誤詳情:", err);
                         results.value[index].name = "辨識失敗";
-                        
-                        if (err.message && err.message.includes('unregistered callers') && !customApiKey.value) {
-                            results.value[index].errorMsg = "請在右上角填寫您的 API Key";
-                        } else {
-                            results.value[index].errorMsg = err.message || "未知網路錯誤或 API 阻擋";
-                        }
-                        
+                        results.value[index].errorMsg = err.message || "網路錯誤或 API 阻擋";
                         results.value[index].status = "error";
                     }
                 };
@@ -347,7 +355,6 @@
                         return;
                     }
 
-                    // 過濾掉還在讀取或是發生錯誤的資料
                     const validData = results.value.filter(r => r.status === 'done' && r.name !== '讀取中...' && r.name !== '未知名稱');
                     
                     if (validData.length === 0) {
@@ -358,7 +365,6 @@
                     isExporting.value = true;
 
                     try {
-                        // 使用 text/plain 格式發送，巧妙避開瀏覽器嚴格的 CORS 檢查
                         const response = await fetch(customScriptUrl.value, { 
                             method: 'POST', 
                             body: JSON.stringify(validData),
@@ -370,7 +376,7 @@
                         const result = await response.json();
                         
                         if (result.status === 'success') {
-                            alert(`太棒了！成功將 ${validData.length} 筆資料同步到 Google 試算表。`);
+                            alert(`成功將 ${validData.length} 筆資料同步到 Google 試算表。`);
                         } else {
                             alert('發生了一點錯誤：' + result.message);
                         }
