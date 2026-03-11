@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極速 AI 營養標示輸入 (V3)</title>
+    <title>極速 AI 營養標示輸入 (安全後端版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
@@ -19,27 +19,21 @@
     <div id="app" class="p-4 max-w-[1600px] mx-auto">
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div>
-                <h1 class="text-3xl font-black text-slate-800 tracking-tight">AI 營養辨識系統 <span class="text-blue-600 text-lg">V3</span></h1>
-                <p class="text-slate-500 font-medium mt-1">針對台灣超商標示優化 | 自動計算總量 | 纖維推估</p>
+                <h1 class="text-3xl font-black text-slate-800 tracking-tight">AI 營養辨識系統 <span class="text-emerald-600 text-lg">安全分享版</span></h1>
+                <p class="text-slate-500 font-medium mt-1">針對台灣超商標示優化 | 自動計算總量 | 雲端 AI 判讀</p>
             </div>
             
             <div class="flex flex-col items-end gap-3 mt-4 md:mt-0">
                 <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
                     <div class="flex flex-col gap-2 relative group z-50">
-                        <input type="password" 
-                               v-model="customApiKey" 
-                               @change="saveSettings" 
-                               placeholder="貼上個人 API Key" 
-                               class="text-xs p-2 rounded-lg border border-slate-300 w-full md:w-56 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all outline-none">
-                        
                         <input type="text" 
                                v-model="customScriptUrl" 
                                @change="saveSettings" 
                                placeholder="貼上 Apps Script 網址" 
-                               class="text-xs p-2 rounded-lg border border-slate-300 w-full md:w-56 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all outline-none">
+                               class="text-xs p-2 rounded-lg border border-slate-300 w-full md:w-64 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 transition-all outline-none">
                                
                         <div class="absolute -bottom-10 right-0 bg-slate-800 text-white text-[11px] px-3 py-2 rounded hidden group-hover:block whitespace-nowrap shadow-lg">
-                            金鑰會存在你的瀏覽器，不會外洩
+                            後端代理網址，填寫一次即自動記住
                         </div>
                     </div>
                     
@@ -64,7 +58,7 @@
                     <input type="file" ref="fileInput" multiple accept="image/*" class="hidden" @change="handleUpload">
                     <div class="text-5xl mb-4 group-hover:scale-110 transition-transform">📸</div>
                     <p class="font-bold text-slate-700">批次上傳照片</p>
-                    <p class="text-xs text-slate-400 mt-1">支援拖放多張圖片</p>
+                    <p class="text-xs text-slate-400 mt-1">支援拖放多張圖片，自動交由雲端分析</p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 overflow-y-auto max-h-[600px] p-1">
@@ -74,7 +68,7 @@
                         <img :src="img.url" class="w-full h-32 object-cover">
                         <div v-if="results[idx]?.status === 'processing'" class="absolute inset-0 bg-white/80 flex flex-col items-center justify-center">
                             <div class="loading-spinner mb-2"></div>
-                            <span class="text-[10px] font-bold text-blue-600 uppercase mt-2">辨識中</span>
+                            <span class="text-[10px] font-bold text-blue-600 uppercase mt-2">雲端辨識中</span>
                         </div>
                         <div v-if="results[idx]?.status === 'error'" class="absolute inset-0 bg-red-50/90 flex flex-col items-center justify-center p-2 text-center">
                             <span class="text-[10px] font-bold text-red-600 leading-tight">辨識失敗</span>
@@ -157,15 +151,11 @@
 
         createApp({
             setup() {
-                const apiKey = ""; 
-                
-                // 這裡把金鑰預設值清空，確保不會再上傳外洩
-                const customApiKey = ref(localStorage.getItem('gemini_api_key') || '');
+                // 將預設網址綁定你的 Apps Script (這樣給別人用時，他們連貼網址都不用)
                 const customScriptUrl = ref(localStorage.getItem('gemini_script_url') || 'https://script.google.com/macros/s/AKfycbzAN311kTYImaJlad5w_CH6U8IGzJ1nknCDj6uuZvToczWlcCOhBmGEQNkdfabq2exi/exec');
                 const isExporting = ref(false);
 
                 const saveSettings = () => {
-                    localStorage.setItem('gemini_api_key', customApiKey.value);
                     localStorage.setItem('gemini_script_url', customScriptUrl.value);
                 };
 
@@ -227,7 +217,7 @@
                             const result = await response.json();
                             if (response.ok) return result;
                             if (i === retries - 1) {
-                                throw new Error(result.error?.message || `HTTP ${response.status}`);
+                                throw new Error(result.error?.message || result.message || `HTTP ${response.status}`);
                             }
                         } catch (err) {
                             if (i === retries - 1) throw err;
@@ -239,66 +229,27 @@
 
                 const processImage = async (file, index) => {
                     try {
-                        const base64Data = await compressImage(file);
-
-                        const prompt = `你是一位專業的台灣食品營養標示判讀專家。請仔細讀取圖片。
-                        
-                        判讀邏輯：
-                        1. 品項名稱：從包裝正面或側面的大字提取。
-                        2. 份量判讀：優先尋找「每一份量」以及「本包裝含X份」。
-                        3. 台灣標示慣例：通常表格有兩欄，左欄是「每份」，右欄是「每 100 公克/毫升」。請務必抓取「每份」欄位的數據。
-                        4. 淨重：從包裝上的「淨重」或內容物描述提取總重量。
-                        5. 輸出數值：
-                           - 如果只有每 100g 數據，請根據淨重換算出總份量的數據。
-                           - 所有營養素回傳該品項「整包裝」的總量。
-                        6. 根據產品推斷最合適的分類 (category)，只能從以下選項中擇一填入：'飯/便當類', '麵食類', '沙拉/輕食', '飲料', '點心/零食', '其他'。
-                        
-                        請回傳 JSON 格式。`;
-
-                        const payload = {
-                            generationConfig: {
-                                responseMimeType: "application/json",
-                                responseSchema: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        name: { type: "STRING" },
-                                        category: { type: "STRING" },
-                                        portions: { type: "NUMBER" },
-                                        netWeight: { type: "NUMBER" },
-                                        total_calories: { type: "NUMBER" },
-                                        total_protein: { type: "NUMBER" },
-                                        total_fat: { type: "NUMBER" },
-                                        total_carb: { type: "NUMBER" },
-                                        total_sodium: { type: "NUMBER" },
-                                        total_fiber: { type: "NUMBER" }
-                                    },
-                                    required: ["name", "category", "portions", "netWeight", "total_calories", "total_protein", "total_fat", "total_carb", "total_sodium", "total_fiber"]
-                                }
-                            },
-                            contents: [{ 
-                                role: "user",
-                                parts: [
-                                    { text: prompt }, 
-                                    { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-                                ] 
-                            }]
-                        };
-
-                        let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-                        
-                        if (customApiKey.value) {
-                            url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${customApiKey.value}`;
-                        } else if (!apiKey) {
-                            throw new Error("請先在右上角填寫您的 API Key");
+                        if (!customScriptUrl.value || !customScriptUrl.value.includes('exec')) {
+                            throw new Error("請先在右上角填寫您的 Apps Script 網址");
                         }
 
-                        const data = await fetchWithBackoff(url, {
+                        const base64Data = await compressImage(file);
+                        
+                        // 打包好照片，通知 Apps Script 去呼叫 AI
+                        const payload = {
+                            action: 'analyze',
+                            base64Data: base64Data
+                        };
+
+                        const res = await fetchWithBackoff(customScriptUrl.value, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                             body: JSON.stringify(payload)
                         });
-
-                        const res = JSON.parse(data.candidates[0].content.parts[0].text);
+                        
+                        if (res.status === 'error') {
+                            throw new Error(res.message);
+                        }
 
                         results.value[index] = {
                             name: res.name || "未知名稱",
@@ -322,7 +273,7 @@
                     } catch (err) {
                         console.error("解析錯誤詳情:", err);
                         results.value[index].name = "辨識失敗";
-                        results.value[index].errorMsg = err.message || "網路錯誤或 API 阻擋";
+                        results.value[index].errorMsg = err.message || "連接伺服器失敗，請檢查 Apps Script 網址";
                         results.value[index].status = "error";
                     }
                 };
@@ -365,9 +316,14 @@
                     isExporting.value = true;
 
                     try {
+                        const payload = {
+                            action: 'save',
+                            data: validData
+                        };
+                        
                         const response = await fetch(customScriptUrl.value, { 
                             method: 'POST', 
-                            body: JSON.stringify(validData),
+                            body: JSON.stringify(payload),
                             headers: {
                                 'Content-Type': 'text/plain;charset=utf-8',
                             }
@@ -389,7 +345,7 @@
                 };
 
                 return { 
-                    customApiKey, customScriptUrl, saveSettings, isExporting,
+                    customScriptUrl, saveSettings, isExporting,
                     images, results, selectedIdx, finishedCount, 
                     handleUpload, reCalc, exportToSheet 
                 };
