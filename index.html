@@ -151,7 +151,6 @@
 
         createApp({
             setup() {
-                // 將預設網址綁定你的 Apps Script (這樣給別人用時，他們連貼網址都不用)
                 const customScriptUrl = ref(localStorage.getItem('gemini_script_url') || 'https://script.google.com/macros/s/AKfycbzAN311kTYImaJlad5w_CH6U8IGzJ1nknCDj6uuZvToczWlcCOhBmGEQNkdfabq2exi/exec');
                 const isExporting = ref(false);
 
@@ -235,34 +234,34 @@
 
                         const base64Data = await compressImage(file);
                         
-                        // 打包好照片，通知 Apps Script 去呼叫 AI
                         const payload = {
                             action: 'analyze',
                             base64Data: base64Data
                         };
 
-                        const res = await fetchWithBackoff(customScriptUrl.value, {
+                        const resRaw = await fetchWithBackoff(customScriptUrl.value, {
                             method: 'POST',
                             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                             body: JSON.stringify(payload)
                         });
                         
-                        if (res.status === 'error') {
-                            throw new Error(res.message);
+                        if (resRaw.status === 'error') {
+                            throw new Error(resRaw.message);
                         }
-
+                        
+                        // 確保拿到的資料是安全的，避免 undefined 造成 toFixed 當機
                         results.value[index] = {
-                            name: res.name || "未知名稱",
-                            category: res.category || "其他",
+                            name: resRaw.name || "未知名稱",
+                            category: resRaw.category || "其他",
                             price: '', 
-                            portions: res.portions || 1,
-                            netWeight: res.netWeight || 0,
-                            calories: res.total_calories,
-                            protein: res.total_protein.toFixed(1),
-                            fat: res.total_fat.toFixed(1),
-                            carbs: res.total_carb.toFixed(1),
-                            sodium: res.total_sodium,
-                            fiber: res.total_fiber || 0,
+                            portions: Number(resRaw.portions || 1),
+                            netWeight: Number(resRaw.netWeight || 0),
+                            calories: Math.round(Number(resRaw.total_calories || 0)),
+                            protein: Number(resRaw.total_protein || 0).toFixed(1),
+                            fat: Number(resRaw.total_fat || 0).toFixed(1),
+                            carbs: Number(resRaw.total_carb || 0).toFixed(1),
+                            sodium: Math.round(Number(resRaw.total_sodium || 0)),
+                            fiber: Number(resRaw.total_fiber || 0),
                             vegType: 'none',
                             status: 'done',
                             fiberEstimated: false,
