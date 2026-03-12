@@ -53,7 +53,6 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div class="lg:col-span-3 space-y-4">
-                <!-- 增加了提示文字，告訴使用者可以直接貼上 -->
                 <div class="border-4 border-dashed border-slate-200 rounded-3xl p-10 text-center bg-white hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer group relative"
                      @click="$refs.fileInput.click()">
                     <input type="file" ref="fileInput" multiple accept="image/*" class="hidden" @change="handleUpload">
@@ -177,11 +176,13 @@
 
                 const finishedCount = computed(() => results.value.filter(r => r.status === 'done' || r.status === 'error').length);
 
-                // 核心處理檔案陣列的函式 (給拖放、點選、剪貼簿共用)
-                const processSelectedFiles = (filesArray) => {
-                    filesArray.forEach(file => {
+                // 核心處理檔案陣列的函式 (改為非同步排隊模式，避免塞爆 Google API)
+                const processSelectedFiles = async (filesArray) => {
+                    for (let i = 0; i < filesArray.length; i++) {
+                        const file = filesArray[i];
                         const url = URL.createObjectURL(file);
                         const idx = images.value.length;
+                        
                         images.value.push({ url, file });
                         results.value.push({ 
                             name: '讀取中...', category: '其他', type: 'main', price: '', portions: 1, netWeight: 0, calories: 0, 
@@ -189,42 +190,43 @@
                             status: 'processing', vegType: 'none', fiberEstimated: false,
                             errorMsg: ''
                         });
-                        processImage(file, idx);
-                    });
+                        
+                        // 等待這張照片處理完畢
+                        await processImage(file, idx);
+                        
+                        // 只要不是最後一張，處理完就強制休息 4 秒鐘，保護我們的免費額度
+                        if (i < filesArray.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 4000));
+                        }
+                    }
                 };
 
-                // 原本的點擊/拖放上傳
                 const handleUpload = (e) => {
                     if (e.target.files && e.target.files.length > 0) {
                         processSelectedFiles(Array.from(e.target.files));
                     }
                 };
 
-                // 新增：監聽鍵盤貼上事件
                 const handlePaste = (e) => {
                     const items = e.clipboardData.items;
                     const files = [];
                     for (let i = 0; i < items.length; i++) {
-                        // 判斷剪貼簿裡面有沒有圖片格式的資料
                         if (items[i].type.indexOf('image') !== -1) {
                             const file = items[i].getAsFile();
                             if (file) files.push(file);
                         }
                     }
                     if (files.length > 0) {
-                        // 防止瀏覽器預設的貼上行為干擾
                         e.preventDefault();
                         processSelectedFiles(files);
                     }
                 };
 
                 onMounted(() => {
-                    // 在網頁載入時綁定貼上事件
                     document.addEventListener('paste', handlePaste);
                 });
 
                 onUnmounted(() => {
-                    // 網頁關閉時解除綁定，好習慣
                     document.removeEventListener('paste', handlePaste);
                 });
 
@@ -320,7 +322,12 @@
                     } catch (err) {
                         console.error("解析錯誤詳情:", err);
                         results.value[index].name = "辨識失敗";
-                        results.value[index].errorMsg = err.message || "連接伺服器失敗，請檢查 Apps Script 網址";
+                        // 把超長的一串英文錯誤訊息修剪得親民一點
+                        let errMsg = err.message || "連接伺服器失敗，請檢查 Apps Script 網址";
+                        if (errMsg.includes('quota') || errMsg.includes('429')) {
+                            errMsg = "免費額度暫時滿了，請稍等一分鐘再試喔";
+                        }
+                        results.value[index].errorMsg = errMsg;
                         results.value[index].status = "error";
                     }
                 };
