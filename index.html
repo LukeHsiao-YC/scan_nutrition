@@ -79,11 +79,12 @@
 
             <div class="lg:col-span-9">
                 <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-x-auto">
-                    <table class="w-full text-sm min-w-[1050px]">
+                    <table class="w-full text-sm min-w-[1150px]">
                         <thead>
                             <tr class="bg-slate-900 text-slate-300 text-[11px] uppercase tracking-wider">
                                 <th class="p-4 text-left font-bold w-48">品項名稱 / 錯誤訊息</th>
                                 <th class="p-4 w-28 text-center">類別</th>
+                                <th class="p-4 w-24 text-center">加購分類</th>
                                 <th class="p-4 w-16 text-center">價格</th>
                                 <th class="p-4 w-16 text-center">份數</th>
                                 <th class="p-4 w-20 text-center text-white">總熱量</th>
@@ -114,6 +115,14 @@
                                         <option value="飲料">飲料</option>
                                         <option value="點心/零食">點心/零食</option>
                                         <option value="其他">其他</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select v-model="item.type" class="w-full p-2 bg-white rounded-lg text-xs" :disabled="item.status === 'error'">
+                                        <option value="main">主餐 (main)</option>
+                                        <option value="protein">蛋白質 (protein)</option>
+                                        <option value="fiber">沙拉 (fiber)</option>
+                                        <option value="extra">其他 (extra)</option>
                                     </select>
                                 </td>
                                 <td class="p-2 text-center"><input v-model.number="item.price" placeholder="$" class="w-full p-2 text-center bg-white rounded-lg" :disabled="item.status === 'error'"></td>
@@ -171,7 +180,7 @@
                         const idx = images.value.length;
                         images.value.push({ url, file });
                         results.value.push({ 
-                            name: '讀取中...', category: '其他', price: '', portions: 1, netWeight: 0, calories: 0, 
+                            name: '讀取中...', category: '其他', type: 'main', price: '', portions: 1, netWeight: 0, calories: 0, 
                             protein: 0, fat: 0, carbs: 0, sodium: 0, fiber: 0, 
                             status: 'processing', vegType: 'none', fiberEstimated: false,
                             errorMsg: ''
@@ -201,7 +210,6 @@
                             canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            // 轉為 jpeg 並設定 0.7 品質，確保格式乾淨且檔案夠小
                             resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
                         };
                         img.onerror = reject;
@@ -250,10 +258,10 @@
                             throw new Error(resRaw.message);
                         }
                         
-                        // 確保拿到的資料是安全的，避免 undefined 造成 toFixed 當機
                         results.value[index] = {
                             name: resRaw.name || "未知名稱",
                             category: resRaw.category || "其他",
+                            type: resRaw.type || "main", 
                             price: '', 
                             portions: Number(resRaw.portions || 1),
                             netWeight: Number(resRaw.netWeight || 0),
